@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 from app.db import db
 from app.services import core
+from app.services import reconcile
 from app.services import tickets as tic
 
 router = APIRouter(tags=["号牌"])
@@ -46,6 +47,19 @@ def waiting_wall():
 def issue_gate():
     with db() as conn:
         return core.issue_gate(conn)
+
+
+@router.get("/发号对账")
+def issue_reconcile():
+    with db() as conn:
+        return core.issue_integrity(conn)
+
+
+@router.post("/发号对账/修复")
+def issue_repair():
+    with db() as conn:
+        fixed = reconcile.repair_legacy_surfaces(conn)
+        return {"修复": fixed, "对账": core.issue_integrity(conn)}
 
 
 @router.get("/发号流水")

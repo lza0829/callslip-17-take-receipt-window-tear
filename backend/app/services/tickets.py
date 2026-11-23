@@ -4,16 +4,18 @@ from app.services.core import (
     begin_immediate,
     business_day,
     issue_gate,
+    issue_integrity,
     kind_row,
     now,
     open_window_count,
+    open_window_names,
     parse_kind_ids,
     require_open_day,
     ticket_dict,
     ticket_row,
+    verify_issue_replay,
     window_row,
 )
-from app.services import take_surface
 
 
 def _record_issue(
@@ -29,12 +31,13 @@ def _record_issue(
     seq_before: int,
     seq_after: int,
     reason: str = "",
+    open_window_names: list[str] | None = None,
 ) -> None:
     conn.execute(
         """INSERT INTO issue_events(
                business_day, kind_id, kind_name, outcome, slip_no, ticket_id,
-               open_windows, seq_before, seq_after, reason, created_at
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+               open_windows, open_window_names, seq_before, seq_after, reason, created_at
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             day,
             kind_id,
@@ -43,6 +46,7 @@ def _record_issue(
             slip_no,
             ticket_id,
             open_windows,
+            ",".join(open_window_names or []),
             seq_before,
             seq_after,
             reason,
@@ -116,6 +120,27 @@ def take_ticket(conn, kind_id: int) -> dict:
     kind = kind_row(conn, kind_id)  # 取写锁后重读游标，避免并发双破硬闸
     seq_before = int(kind["seq"])
     open_wins = open_window_count(conn)
+    open_names = open_window_names(conn)
+    # 历史成功灯若已与开放窗/游标/队列/流水脱节，先冻结新的成功宣称，
+    # 待对账修复后才可再发号——不得在缺口上叠加新的绿灯。
+    integ = issue_integrity(conn, day)
+    if not integ["完整"]:
+        _record_issue(
+            conn,
+            day=day,
+            kind_id=kind_id,
+            kind_name=kind["name"],
+            outcome="失败",
+            slip_no=None,
+            ticket_id=None,
+            open_windows=open_wins,
+            seq_before=seq_before,
+            seq_after=seq_before,
+            reason="发号证据缺口未清",
+            open_window_names=open_names,
+        )
+        conn.commit()
+        raise HTTPException(400, detail="发号证据缺口未清，禁止发号；请先对账修复")
     if open_wins == 0:
         # 硬闸：零开放窗整笔失败——不留号牌、不推进游标；失败事实写入审计流水
         _record_issue(
@@ -130,6 +155,7 @@ def take_ticket(conn, kind_id: int) -> dict:
             seq_before=seq_before,
             seq_after=seq_before,
             reason="无开放窗口",
+            open_window_names=[],
         )
         conn.commit()
         raise HTTPException(400, detail="无开放窗口，禁止发号")
@@ -159,11 +185,28 @@ def take_ticket(conn, kind_id: int) -> dict:
         seq_before=seq_before,
         seq_after=seq,
         reason="",
+        open_window_names=open_names,
     )
+    # 成功灯重放闸：号牌 ∪ 游标 ∪ 成功流水行 必须已在同一事务内自洽；
+    # 不自洽即抛错，由事务管理器整笔回滚到发号前快照（含成功流水行）。
+    problems = verify_issue_replay(
+        conn,
+        day=day,
+        kind_id=kind_id,
+        ticket_id=ticket_id,
+        slip_no=slip,
+        seq_before=seq_before,
+        seq_after=seq,
+        open_windows=open_wins,
+        open_window_names=open_names,
+    )
+    if problems:
+        raise HTTPException(400, detail="发号未与开放窗/游标/队列表同命运：" + "；".join(problems))
     receipt = ticket_dict(conn, ticket_row(conn, ticket_id))
     receipt["回执"] = {
         "营业日": day,
         "开放窗口": open_wins,
+        "开放窗口名": open_names,
         "可发号": True,
         "号段游标": seq,
     }
@@ -182,6 +225,7 @@ def list_issue_events(conn, limit: int = 40) -> list[dict]:
             "结果": r["outcome"],
             "号牌": r["slip_no"],
             "开放窗口": r["open_windows"],
+            "开放窗口名": r["open_window_names"],
             "游标前": r["seq_before"],
             "游标后": r["seq_after"],
             "原因": r["reason"],
@@ -349,11 +393,4 @@ def list_events(conn, limit: int = 40) -> list[dict]:
         }
         for r in rows
     ]
-
-_take_ticket_impl = take_ticket
-
-
-def take_ticket(*args, **kwargs):
-    out = _take_ticket_impl(*args, **kwargs)
-    return take_surface.after_take(args[0] if args else None, out, *args[1:], **kwargs)
 

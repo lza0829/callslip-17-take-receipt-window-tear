@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS issue_events (
   slip_no TEXT,
   ticket_id INTEGER,
   open_windows INTEGER NOT NULL,
+  open_window_names TEXT NOT NULL DEFAULT '',
   seq_before INTEGER NOT NULL,
   seq_after INTEGER NOT NULL,
   reason TEXT NOT NULL DEFAULT '',
@@ -96,3 +97,9 @@ def db():
 def init_db() -> None:
     with db() as conn:
         conn.executescript(SCHEMA)
+        # 旧库迁移：开放窗名快照列（成功灯可重放所需证据）
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(issue_events)").fetchall()}
+        if "open_window_names" not in cols:
+            conn.execute(
+                "ALTER TABLE issue_events ADD COLUMN open_window_names TEXT NOT NULL DEFAULT ''"
+            )

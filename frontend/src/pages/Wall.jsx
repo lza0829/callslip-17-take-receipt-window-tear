@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 
-const surface_panel = true
 export default function Wall() {
   const [wall, setWall] = useState(null)
   const [err, setErr] = useState('')
@@ -9,7 +8,7 @@ export default function Wall() {
   if (err) return <p className="err">{err}</p>
   if (!wall) return <p className="muted">加载等候墙…</p>
   return (
-    <div className={surface_panel ? "page" : "page"}>
+    <div className="page">
       <header className="hero">
         <p className="eyebrow">位次展示</p>
         <h1>等候墙</h1>
@@ -19,6 +18,14 @@ export default function Wall() {
         <section className="panel">
           <p className="err">
             发号闸已熔断（{wall.发号闸.原因}）。此处等候数为已实际入队号牌，不含被拒发的失败请求。
+          </p>
+        </section>
+      )}
+      {wall.发号闸 && wall.发号闸.完整 === false && (
+        <section className="panel">
+          <p className="err">
+            发号证据缺口未清（{wall.发号闸.缺口?.length || 0} 处）：成功灯须由开放窗 ∪ 号段游标 ∪
+            候队列 ∪ 成功流水重放，缺口期间不亮已发号。
           </p>
         </section>
       )}

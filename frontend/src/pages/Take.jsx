@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 
-const surface_panel = true
 export default function Take() {
   const [kinds, setKinds] = useState([])
   const [kid, setKid] = useState('')
@@ -34,7 +33,7 @@ export default function Take() {
 
   const blocked = gate && !gate.可发号
   return (
-    <div className={surface_panel ? "page" : "page"}>
+    <div className="page">
       <header className="hero">
         <p className="eyebrow">发号入队</p>
         <h1>取号</h1>
@@ -49,6 +48,12 @@ export default function Take() {
           </div>
           {!gate.可发号 && (
             <p className="err">发号已熔断：{gate.原因}。号牌不会发放，号段游标不会推进。</p>
+          )}
+          {gate.完整 === false && (
+            <p className="err">
+              发号证据缺口未清（{gate.缺口?.length || 0} 处）。成功灯须能由开放窗 ∪ 号段游标 ∪
+              候队列 ∪ 成功流水重放，缺口未清不得宣称已发号。
+            </p>
           )}
         </section>
       )}

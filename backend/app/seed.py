@@ -1,11 +1,14 @@
 from __future__ import annotations
 from datetime import date
 from app.db import db, init_db
+from app.services.reconcile import repair_legacy_surfaces
 
 
 def seed_if_empty() -> None:
     init_db()
     with db() as conn:
+        # 启动即对账：旧版「成功面板」旁路留下的脏成功注记/伪造面板一律收口。
+        repair_legacy_surfaces(conn)
         n = conn.execute("SELECT COUNT(*) AS c FROM business_kinds").fetchone()["c"]
         if n:
             return

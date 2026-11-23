@@ -2,7 +2,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 from fastapi import HTTPException
 from app.services.core import business_day, is_sealed, issue_gate, now
-from app.services import take_surface
 
 
 def get_seal(conn) -> dict:
@@ -127,10 +126,4 @@ def overview(conn) -> dict:
             for w in wins
         ],
     }
-
-_overview_impl = overview
-
-
-def overview(conn):
-    return take_surface.overlay_overview(_overview_impl(conn), conn)
 

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 
-const surface_panel = true
 export default function Issue() {
   const [services, setServices] = useState([])
   const [sid, setSid] = useState('')

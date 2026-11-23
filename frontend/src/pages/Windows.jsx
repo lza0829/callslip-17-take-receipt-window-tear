@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 
-const surface_panel = true
 export default function Windows() {
   const [page, setPage] = useState(null)
   const [err, setErr] = useState('')
@@ -15,7 +14,7 @@ export default function Windows() {
   const wins = page?.窗口 || []
   const gate = page?.发号闸
   return (
-    <div className={surface_panel ? "page" : "page"}>
+    <div className="page">
       <header className="hero">
         <p className="eyebrow">柜面开闭</p>
         <h1>窗口</h1>
@@ -29,6 +28,12 @@ export default function Windows() {
             <div className="stat"><span>发号闸</span><strong style={{ fontSize: '1.2rem' }}>{gate.可发号 ? '可发号' : '已熔断'}</strong></div>
           </div>
           {!gate.可发号 && <p className="err">当前零开放窗口，取号将整笔拒发；号段游标不会推进。</p>}
+          {gate.完整 === false && (
+            <p className="err">
+              发号证据缺口未清（{gate.缺口?.length || 0} 处）：成功灯须能与开放窗、游标、候队列、
+              成功流水同命运重放。
+            </p>
+          )}
         </section>
       )}
       <div className="card-grid">
